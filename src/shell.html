@@ -1,0 +1,417 @@
+<title>卓楓學區探索地圖</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* 版面概念：全螢幕 3D 模型，介面像貼在立體地圖邊緣的野外調查標籤 */
+:root {
+  --ink: #14281d;          /* 山林墨綠：文字 */
+  --ink-soft: #4d5f53;
+  --panel: rgba(249, 251, 245, 0.94);
+  --panel-solid: #f9fbf5;
+  --line: #d3dccb;
+  --river: #1f6fb2;        /* 秀姑巒溪藍：可操作元素 */
+  --river-deep: #164f80;
+  --sun: #f2c230;          /* 布農織紋黃：探索成就 */
+  --bunun: #b8322a;        /* 布農織紋紅：玩家位置 */
+  --veil: rgba(16, 36, 26, 0.62);
+  --f-display: "LXGW WenKai TC", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", serif;
+  --f-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", sans-serif;
+  --r: 14px;
+  --gap: 10px;
+  --inset-t: max(12px, env(safe-area-inset-top, 0px));
+  --inset-b: max(12px, env(safe-area-inset-bottom, 0px));
+  --inset-l: max(16px, env(safe-area-inset-left, 0px));
+  --inset-r: max(16px, env(safe-area-inset-right, 0px));
+  color-scheme: light;
+}
+html, body { height: 100%; }
+body { margin: 0; overflow: hidden; background: #bfe3f2; color: var(--ink); font-family: var(--f-body); font-size: 15px; -webkit-font-smoothing: antialiased; touch-action: none; }
+#scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
+button { font: inherit; color: inherit; }
+button:focus-visible, .lbl:focus-visible { outline: 3px solid var(--sun); outline-offset: 2px; }
+
+/* ---------- 地標名稱 ---------- */
+#labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+.lbl { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; white-space: nowrap; border: 0; padding: 3px 9px 4px; border-radius: 999px; background: var(--panel-solid); color: var(--ink); font-size: 13px; font-weight: 500; line-height: 1.3; box-shadow: 0 1px 0 rgba(0,0,0,.08), 0 3px 10px rgba(20,40,29,.18); }
+.lbl::after { content: ""; position: absolute; left: 50%; bottom: -5px; width: 8px; height: 8px; background: inherit; transform: translateX(-50%) rotate(45deg); border-radius: 1px; }
+.lbl.found { background: var(--sun); }
+.lbl-campus { font-size: 12px; padding: 2px 7px 3px; }
+.lbl-natural { background: var(--river); color: #fff; }
+.lbl-natural.found { background: var(--river-deep); color: var(--sun); }
+.lbl-area { font-family: var(--f-display); font-weight: 700; font-size: 20px; padding: 4px 14px 6px; background: var(--ink); color: #fff8dd; letter-spacing: .06em; cursor: default; }
+.lbl-area.found { background: var(--ink); }
+.lbl[hidden] { display: none !important; }
+
+/* ---------- 抬頭介面 ---------- */
+.hud { position: fixed; z-index: 20; opacity: 0; pointer-events: none; transition: opacity .4s ease; }
+body.is-playing .hud { opacity: 1; pointer-events: auto; }
+.panel { background: var(--panel); border-radius: var(--r); box-shadow: 0 6px 24px rgba(20, 40, 29, .18); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+
+#brand { top: var(--inset-t); left: var(--inset-l); display: flex; align-items: center; gap: 10px; padding: 8px 12px 8px 14px; max-width: calc(100vw - 210px - var(--inset-l) - var(--inset-r)); flex-wrap: wrap; }
+#brand h1 { margin: 0; font-family: var(--f-display); font-size: 20px; font-weight: 700; letter-spacing: .04em; text-wrap: balance; }
+.chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; padding: 3px 9px; border-radius: 999px; background: #e3ecdd; color: var(--ink); white-space: nowrap; }
+.chip b { font-variant-numeric: tabular-nums; }
+.chip.sun { background: var(--sun); }
+
+#mapbox { top: var(--inset-t); right: var(--inset-r); width: 196px; padding: 8px; }
+#minimap { display: block; width: 100%; border-radius: 9px; cursor: crosshair; image-rendering: auto; }
+.map-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 6px; font-size: 11px; color: var(--ink-soft); }
+.legend { display: flex; gap: 8px; flex-wrap: wrap; }
+.legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 3px; }
+#compass { position: absolute; top: 14px; left: 14px; width: 34px; height: 34px; border-radius: 50%; background: var(--panel-solid); box-shadow: 0 2px 6px rgba(0,0,0,.2); display: grid; place-items: center; pointer-events: none; }
+#compass-needle { width: 34px; height: 34px; display: grid; place-items: center; }
+#compass-needle span { font-family: var(--f-display); font-weight: 700; font-size: 13px; color: var(--bunun); transform: translateY(-8px); }
+#compass-needle::before { content: ""; position: absolute; width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 9px solid var(--bunun); transform: translateY(1px); }
+
+#readout { left: var(--inset-l); bottom: var(--inset-b); padding: 10px 14px; display: grid; grid-template-columns: auto auto; gap: 2px 14px; align-items: baseline; }
+#readout .k { font-size: 11px; color: var(--ink-soft); letter-spacing: .08em; }
+#readout .v { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+#readout .big { font-family: var(--f-display); font-size: 30px; line-height: 1; }
+#readout .unit { font-size: 13px; font-weight: 500; margin-left: 2px; }
+
+#tools { right: var(--inset-r); bottom: var(--inset-b); display: flex; flex-direction: column; gap: 8px; }
+.tool { display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 76px; height: 44px; padding: 0 14px; border: 0; border-radius: 12px; background: var(--panel-solid); font-weight: 700; font-size: 14px; cursor: pointer; box-shadow: 0 4px 14px rgba(20, 40, 29, .18); }
+.tool[aria-pressed="true"], .tool[aria-expanded="true"] { background: var(--river); color: #fff; }
+.tool svg { width: 18px; height: 18px; flex: none; }
+
+#hint { left: 50%; bottom: var(--inset-b); transform: translateX(-50%); font-size: 12px; padding: 6px 12px; color: var(--ink-soft); white-space: nowrap; }
+body.has-card #hint { opacity: 0; }
+
+#card { left: 50%; bottom: calc(var(--inset-b) + 44px); transform: translateX(-50%); width: min(440px, calc(100vw - 2 * var(--inset-l) - 200px)); padding: 14px 16px 14px; z-index: 25; }
+#card[hidden] { display: none; }
+.card-top { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-soft); }
+#card-name { margin: 6px 0 4px; font-family: var(--f-display); font-size: 24px; line-height: 1.2; text-wrap: balance; }
+#card-desc { margin: 0 0 10px; line-height: 1.65; font-size: 14px; max-width: 60ch; }
+.task { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: #eef3e8; font-size: 13px; color: var(--ink-soft); }
+.task b { color: var(--ink); }
+.card-actions { display: flex; gap: 8px; margin-top: 10px; }
+.btn { border: 0; border-radius: 10px; padding: 9px 14px; font-weight: 700; cursor: pointer; background: #e3ecdd; }
+.btn.primary { background: var(--river); color: #fff; }
+#card-close { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; cursor: pointer; font-size: 20px; line-height: 1; color: var(--ink-soft); }
+
+#places { top: var(--inset-t); right: var(--inset-r); bottom: var(--inset-b); width: min(340px, calc(100vw - var(--inset-l) - var(--inset-r))); padding: 16px; z-index: 30; overflow-y: auto; }
+#places[hidden] { display: none; }
+#places h2 { margin: 0 0 4px; font-family: var(--f-display); font-size: 22px; }
+#places .sub { margin: 0 0 12px; font-size: 13px; color: var(--ink-soft); }
+#places h3 { margin: 14px 0 6px; font-size: 13px; letter-spacing: .08em; color: var(--ink-soft); }
+.place-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.place { display: flex; align-items: center; gap: 7px; text-align: left; border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 8px 9px; font-size: 13px; cursor: pointer; min-width: 0; }
+.place span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.place .dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--ink-soft); flex: none; }
+.place.found .dot { background: var(--sun); border-color: #b38a12; }
+#places-close { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: #e3ecdd; cursor: pointer; font-size: 18px; }
+
+#toast { top: calc(var(--inset-t) + 4px); left: 50%; transform: translateX(-50%); padding: 9px 16px; border-radius: 999px; background: var(--sun); color: var(--ink); font-weight: 700; z-index: 40; box-shadow: 0 6px 18px rgba(0,0,0,.2); white-space: nowrap; }
+#toast[hidden] { display: none; }
+
+#joystick { left: calc(var(--inset-l) + 6px); bottom: calc(var(--inset-b) + 96px); width: 120px; height: 120px; border-radius: 50%; background: rgba(249, 251, 245, .55); border: 2px solid rgba(255,255,255,.8); display: none; place-items: center; touch-action: none; }
+#joystick-knob { width: 52px; height: 52px; border-radius: 50%; background: var(--panel-solid); box-shadow: 0 3px 10px rgba(0,0,0,.25); pointer-events: none; }
+@media (pointer: coarse) { #joystick { display: grid; } #hint { display: none; } }
+body.is-bird #joystick { visibility: hidden; }
+
+/* ---------- 開場 ---------- */
+#boot { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: var(--inset-t) var(--inset-r) var(--inset-b) var(--inset-l); background: linear-gradient(180deg, rgba(16,36,26,.25), var(--veil) 55%); overflow-y: auto; }
+#boot[hidden] { display: none; }
+.boot-card { width: min(560px, 100%); padding: 26px 26px 22px; border-radius: 20px; background: var(--panel); box-shadow: 0 18px 50px rgba(10, 25, 18, .35); }
+.eyebrow { margin: 0; font-size: 12px; letter-spacing: .14em; color: var(--ink-soft); }
+.boot-card h1 { margin: 6px 0 8px; font-family: var(--f-display); font-size: clamp(32px, 7vw, 46px); line-height: 1.1; letter-spacing: .03em; text-wrap: balance; }
+.lede { margin: 0 0 16px; font-size: 15px; line-height: 1.7; max-width: 46ch; }
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 18px; }
+.fact { padding: 10px 12px; border-radius: 12px; background: #eef3e8; }
+.fact .n { font-family: var(--f-display); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.fact .t { font-size: 12px; color: var(--ink-soft); }
+.boot-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.boot-actions .btn { padding: 13px 18px; font-size: 16px; }
+.boot-actions .btn.primary:disabled { opacity: .55; cursor: progress; }
+.btn.ghost { background: transparent; border: 1.5px solid var(--line); color: var(--ink); }
+.btn .tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: var(--sun); font-size: 11px; vertical-align: 2px; }
+#login-note { margin: 12px 0 0; padding: 10px 12px; border-left: 3px solid var(--sun); background: #fbf6df; font-size: 13px; line-height: 1.65; border-radius: 0; }
+#login-note[hidden] { display: none; }
+#boot-status { margin: 12px 0 0; min-height: 1.2em; font-size: 13px; color: var(--ink-soft); }
+.credit { margin: 14px 0 0; font-size: 11.5px; line-height: 1.6; color: var(--ink-soft); }
+
+@media (max-width: 640px) {
+  #brand h1 { font-size: 16px; }
+  #brand { padding: 6px 10px; max-width: calc(100vw - 150px - var(--inset-l) - var(--inset-r)); }
+  #mapbox { width: 136px; padding: 6px; }
+  .map-foot .legend { display: none; }
+  #compass { top: 10px; left: 10px; width: 28px; height: 28px; }
+  #card { left: var(--inset-l); right: var(--inset-r); transform: none; width: auto; bottom: calc(var(--inset-b) + 230px); }
+  #readout { bottom: calc(var(--inset-b) + 0px); left: calc(var(--inset-l) + 140px); padding: 8px 10px; gap: 0 8px; }
+  #readout .big { font-size: 22px; }
+  #joystick { bottom: var(--inset-b); }
+  .tool { min-width: 0; height: 40px; padding: 0 11px; font-size: 13px; }
+  .tool .t { display: none; }
+  .facts .fact .n { font-size: 16px; white-space: nowrap; }
+}
+@media (max-width: 640px) and (pointer: fine) { #readout { left: var(--inset-l); } }
+@media (prefers-reduced-motion: reduce) { .hud { transition: none; } }
+
+/* ---------- 交通：ubike 與愛心專車 ---------- */
+:root { --bike: #f0a020; --bike-ink: #5a3a00; --bubu: #2e8b57; --bubu-soft: #e2f2e8; }
+.lbl-transport { font-size: 12px; padding: 2px 8px 3px; }
+.lbl-ubike { background: var(--bike); color: var(--bike-ink); }
+.lbl-bubu { background: var(--bubu); color: #fff; }
+#action { right: var(--inset-r); bottom: calc(var(--inset-b) + 300px); border: 0; border-radius: 14px; padding: 12px 16px; font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 6px 18px rgba(20,40,29,.25); background: var(--bike); color: var(--bike-ink); display: flex; gap: 8px; align-items: center; max-width: min(320px, 70vw); text-align: left; line-height: 1.35; }
+#action.bubu { background: var(--bubu); color: #fff; }
+#action[hidden] { display: none; }
+#action kbd { font: 700 11px var(--f-body); padding: 1px 6px; border-radius: 5px; background: rgba(255,255,255,.55); color: inherit; }
+#status-pill { top: calc(var(--inset-t) + 52px); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 14px; border-radius: 999px; background: var(--panel-solid); box-shadow: 0 6px 18px rgba(20,40,29,.2); font-size: 13px; white-space: nowrap; z-index: 35; }
+#status-pill[hidden] { display: none; }
+#status-pill b { font-variant-numeric: tabular-nums; }
+#status-pill .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bike); }
+#status-pill.bubu .dot { background: var(--bubu); }
+#status-pill button { border: 0; border-radius: 999px; padding: 5px 10px; background: #e3ecdd; font-weight: 700; font-size: 12px; cursor: pointer; }
+#transit { top: var(--inset-t); right: var(--inset-r); bottom: var(--inset-b); width: min(380px, calc(100vw - var(--inset-l) - var(--inset-r))); padding: 16px; z-index: 30; overflow-y: auto; }
+#transit[hidden] { display: none; }
+#transit h2 { margin: 0 0 10px; font-family: var(--f-display); font-size: 22px; }
+#transit-close { position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: #e3ecdd; cursor: pointer; font-size: 18px; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px; border-radius: 12px; background: #e9efe3; margin-bottom: 12px; }
+.tabs button { border: 0; border-radius: 9px; padding: 8px 6px; font-weight: 700; background: transparent; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+.fare { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 10px; font-size: 13px; line-height: 1.5; margin-bottom: 10px; }
+.fare.ubike { background: #fdf0d5; color: var(--bike-ink); }
+.fare.bubu { background: var(--bubu-soft); color: #18472c; }
+.fare b { font-size: 15px; }
+.t-sec h3 { margin: 14px 0 6px; font-size: 13px; letter-spacing: .06em; color: var(--ink-soft); }
+.row-list { display: grid; gap: 6px; }
+.row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-size: 13px; }
+.row .grow { flex: 1; min-width: 0; }
+.row .sub { color: var(--ink-soft); font-size: 12px; }
+.row button { border: 0; border-radius: 8px; padding: 6px 9px; background: #e3ecdd; font-weight: 700; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.badge { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; background: #e3ecdd; }
+.badge.ok { background: var(--bubu-soft); color: #18472c; } .badge.wait { background: #fdf0d5; color: var(--bike-ink); } .badge.off { background: #eee; color: #777; }
+.form { display: grid; gap: 9px; }
+.form label { display: grid; gap: 4px; font-size: 13px; font-weight: 500; }
+.form input, .form select { font: inherit; padding: 8px 10px; border: 1.5px solid var(--line); border-radius: 9px; background: #fff; color: var(--ink); min-width: 0; }
+.form .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.form .err { color: #b8322a; font-size: 12px; min-height: 1em; }
+.empty { font-size: 13px; color: var(--ink-soft); padding: 6px 2px; }
+@media (max-width: 640px) { #action { bottom: calc(var(--inset-b) + 250px); } #status-pill { top: calc(var(--inset-t) + 44px); } }
+
+/* ---------- 平面配置編輯器 ---------- */
+:root { --ed-bg: #f3f5ef; --ed-line: #cfd8c8; --ed-sel: #1f6fb2; --ed-warn: #c0392b; }
+#btn-edit[hidden] { display: none; }
+#editor { position: fixed; inset: 0; z-index: 70; display: grid; grid-template-columns: minmax(0, 1fr) 320px; grid-template-rows: auto minmax(0, 1fr); background: var(--ed-bg); color: var(--ink); padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+#editor[hidden] { display: none; }
+.ed-bar { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px max(16px, env(safe-area-inset-left, 0px)); background: var(--panel-solid); border-bottom: 1px solid var(--ed-line); }
+.ed-bar h2 { margin: 0 auto 0 0; font-family: var(--f-display); font-size: 20px; }
+.ed-bar .sub { font-size: 12px; color: var(--ink-soft); font-family: var(--f-body); font-weight: 400; margin-left: 6px; }
+.ed-btn { border: 0; border-radius: 10px; padding: 8px 12px; font-weight: 700; font-size: 13px; cursor: pointer; background: #e3ecdd; color: var(--ink); white-space: nowrap; }
+.ed-btn:disabled { opacity: .45; cursor: default; }
+.ed-btn.primary { background: var(--river); color: #fff; }
+.ed-btn.ubike { background: var(--bike); color: var(--bike-ink); }
+.ed-btn.bubu { background: var(--bubu); color: #fff; }
+.ed-btn.danger { background: #f6dcd8; color: #8e2a1f; }
+.ed-btn[aria-pressed="true"] { outline: 3px solid var(--ink); outline-offset: 1px; }
+.ed-map { position: relative; min-width: 0; min-height: 0; overflow: hidden; }
+#ed-canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; background: #dfe7d6; }
+#ed-canvas.placing { cursor: crosshair; }
+.ed-zoom { position: absolute; right: 12px; bottom: 12px; display: grid; gap: 6px; }
+.ed-zoom button { width: 40px; height: 40px; border: 0; border-radius: 10px; background: var(--panel-solid); box-shadow: 0 2px 8px rgba(0,0,0,.18); font-size: 20px; font-weight: 700; cursor: pointer; }
+.ed-hint { position: absolute; left: 12px; top: 12px; max-width: min(520px, calc(100% - 24px)); padding: 7px 11px; border-radius: 10px; background: rgba(255,255,255,.92); font-size: 12.5px; line-height: 1.5; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+.ed-scale { position: absolute; left: 12px; bottom: 12px; padding: 4px 8px; border-radius: 8px; background: rgba(255,255,255,.9); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.ed-side { overflow-y: auto; padding: 14px 16px 20px; border-left: 1px solid var(--ed-line); background: var(--panel-solid); display: grid; gap: 14px; align-content: start; }
+.ed-side h3 { margin: 0 0 6px; font-size: 12.5px; letter-spacing: .08em; color: var(--ink-soft); }
+.ed-layers { display: flex; flex-wrap: wrap; gap: 6px; }
+.ed-layers label { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; border: 1px solid var(--ed-line); border-radius: 999px; font-size: 12.5px; cursor: pointer; background: #fff; }
+.ed-layers i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.ed-add { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ed-sel { padding: 12px; border-radius: 12px; background: #f1f5ec; display: grid; gap: 9px; }
+.ed-sel .k { font-size: 12px; color: var(--ink-soft); }
+.ed-sel .nm { font-family: var(--f-display); font-size: 20px; line-height: 1.2; }
+.ed-sel input[type=text] { font: inherit; padding: 7px 9px; border: 1.5px solid var(--ed-line); border-radius: 8px; min-width: 0; }
+.ed-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.ed-row .ed-btn { padding: 7px 10px; }
+.ed-row input[type=range] { flex: 1; min-width: 120px; }
+.ed-num { font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--ink-soft); }
+.ed-warn { color: var(--ed-warn); font-size: 12.5px; line-height: 1.5; }
+.ed-warnlist { display: grid; gap: 4px; }
+.ed-warnlist button { text-align: left; border: 1px solid #f0c8c2; background: #fff6f4; color: #8e2a1f; border-radius: 8px; padding: 6px 8px; font-size: 12.5px; cursor: pointer; }
+.ed-empty { font-size: 12.5px; color: var(--ink-soft); line-height: 1.6; }
+#ed-confirm { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; background: rgba(16,36,26,.45); padding: 16px; }
+#ed-confirm[hidden] { display: none; }
+#ed-confirm .box { width: min(420px, 100%); background: var(--panel-solid); border-radius: 16px; padding: 18px; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+#ed-confirm h3 { margin: 0 0 8px; font-family: var(--f-display); font-size: 20px; }
+#ed-confirm p { margin: 0 0 14px; font-size: 14px; line-height: 1.65; }
+#ed-confirm .ed-row { justify-content: flex-end; }
+#ed-msg { font-size: 13px; min-height: 1.2em; }
+#preview-bar { position: fixed; left: 50%; top: calc(var(--inset-t) + 96px); transform: translateX(-50%); z-index: 45; display: flex; gap: 8px; align-items: center; padding: 8px 8px 8px 14px; border-radius: 999px; background: #1f2a24; color: #fff; font-size: 13px; box-shadow: 0 6px 18px rgba(0,0,0,.3); white-space: nowrap; }
+#preview-bar[hidden] { display: none; }
+#preview-bar .ed-btn { padding: 6px 10px; }
+@media (max-width: 760px) {
+  #editor { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) minmax(0, 44%); }
+  .ed-side { border-left: 0; border-top: 1px solid var(--ed-line); }
+  .ed-bar h2 { font-size: 17px; }
+  .ed-bar .sub { display: none; }
+  #preview-bar { top: calc(var(--inset-t) + 168px); left: auto; right: var(--inset-r); transform: none; font-size: 12px; }
+  .ed-hint { font-size: 11px; padding: 5px 8px; right: 60px; }
+}
+</style>
+
+<canvas id="scene" tabindex="0" aria-label="卓楓學區 3D 地圖"></canvas>
+<div id="labels"></div>
+
+<header id="brand" class="hud panel">
+  <h1>卓楓學區</h1>
+  <span class="chip">訪客模式</span>
+  <span class="chip sun" title="已發現的地點">探索 <b id="progress">0 / 0</b></span>
+</header>
+
+<aside id="mapbox" class="hud panel" aria-label="小地圖">
+  <canvas id="minimap" width="384" height="284" title="點小地圖可以直接傳送"></canvas>
+  <div id="compass" aria-hidden="true"><div id="compass-needle"><span>北</span></div></div>
+  <div class="map-foot">
+    <div class="legend"><span><i style="background:#f2c230"></i>200 m</span><span><i style="background:#b8322a"></i>360 m</span><span><i style="background:#3d9ad6"></i>溪流</span></div>
+    <span>點地圖傳送</span>
+  </div>
+</aside>
+
+<section id="readout" class="hud panel" aria-live="polite">
+  <span class="k">海拔</span><span class="v"><span class="big" id="elev">0</span><span class="unit">m</span></span>
+  <span class="k">所在地</span><span class="v" id="where">—</span>
+  <span class="k">離學校</span><span class="v"><span id="dist">0</span><span class="unit">m</span></span>
+</section>
+
+<nav id="tools" class="hud" aria-label="地圖工具">
+  <button class="tool" id="btn-places" type="button" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span class="t">地點</span></button>
+  <button class="tool" id="btn-bird" type="button" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18l6-9 4 6 3-4 5 7z"/><path d="M3 21h18"/></svg><span class="t">鳥瞰</span></button>
+  <button class="tool" id="btn-run" type="button" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h10M11 6l6 6-6 6"/><path d="M3 7h4M3 17h4"/></svg><span class="t">跑步</span></button>
+  <button class="tool" id="btn-transit" type="button" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="17" r="3.2"/><circle cx="18" cy="17" r="3.2"/><path d="M6 17l4-8h5l3 8M10 9l-1.5-3H6M13 9l-2 8"/></svg><span class="t">交通</span></button>
+  <button class="tool" id="btn-edit" type="button" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg><span class="t">配置</span></button>
+  <button class="tool" id="btn-labels" type="button" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="10" rx="5"/><path d="M12 16v4"/></svg><span class="t">名稱</span></button>
+</nav>
+
+<p id="hint" class="hud panel"></p>
+
+<article id="card" class="hud panel" hidden aria-live="polite">
+  <button id="card-close" type="button" aria-label="關閉">×</button>
+  <div class="card-top"><span class="chip" id="card-area">—</span><span id="card-elev">海拔 — m</span></div>
+  <h2 id="card-name">—</h2>
+  <p id="card-desc"></p>
+  <div class="task"><b>學習任務</b><span>老師正在設計這個地點的學習任務</span></div>
+  <div class="card-actions"><button class="btn primary" id="card-go" type="button">走到這裡</button></div>
+</article>
+
+<aside id="places" class="hud panel" hidden aria-label="地點列表">
+  <button id="places-close" type="button" aria-label="關閉">×</button>
+  <h2>地點</h2>
+  <p class="sub">點一下就會傳送過去。黃點是已經發現的地方。</p>
+  <div id="places-list"></div>
+</aside>
+
+<div id="toast" class="hud" hidden role="status"></div>
+<button id="action" class="hud" type="button" hidden></button>
+<div id="status-pill" class="hud" hidden role="status"><span class="dot"></span><span id="status-text"></span><button id="status-btn" type="button" hidden></button></div>
+
+<aside id="transit" class="hud panel" hidden aria-label="交通">
+  <button id="transit-close" type="button" aria-label="關閉">×</button>
+  <h2>交通</h2>
+  <div class="tabs" role="tablist" style="grid-template-columns:1fr 1fr 1fr">
+    <button type="button" role="tab" id="tab-ubike" aria-selected="true">ubike</button>
+    <button type="button" role="tab" id="tab-bus" aria-selected="false">定時小巴</button>
+    <button type="button" role="tab" id="tab-bubu" aria-selected="false">預約轎車</button>
+  </div>
+  <section id="pane-ubike" class="t-sec">
+    <div class="fare ubike" id="ubike-fare"></div>
+    <p class="empty" style="margin:0">走到任何一個 ubike 站就能借車，騎到任一站都可以還車。所有人都能騎，不用登入。</p>
+    <h3>ubike 站</h3>
+    <div class="row-list" id="ubike-stations"></div>
+    <h3>我的騎乘紀錄</h3>
+    <div class="row-list" id="ubike-history"></div>
+  </section>
+  <section id="pane-bus" class="t-sec" hidden>
+    <div class="fare bubu" id="bus-fare"></div>
+    <p class="empty" style="margin:0" id="bus-loop"></p>
+    <h3>各站下一班</h3>
+    <div class="row-list" id="bus-stops"></div>
+  </section>
+  <section id="pane-bubu" class="t-sec" hidden>
+    <div class="fare bubu" id="bubu-fare"></div>
+    <form class="form" id="bubu-form" novalidate>
+      <label>乘客姓名<input id="bubu-name" type="text" maxlength="20" autocomplete="name" placeholder="例如：Lahang"></label>
+      <div class="two">
+        <label>上車站<select id="bubu-from"></select></label>
+        <label>下車站<select id="bubu-to"></select></label>
+      </div>
+      <div class="two">
+        <label>出發時間<input id="bubu-time" type="datetime-local"></label>
+        <label>人數<select id="bubu-people"></select></label>
+      </div>
+      <div class="err" id="bubu-err" role="alert"></div>
+      <button class="btn primary" type="submit" id="bubu-submit" style="background:var(--bubu)">送出預約</button>
+    </form>
+    <h3>我的預約</h3>
+    <div class="row-list" id="bubu-list"></div>
+  </section>
+</aside>
+<div id="preview-bar" hidden role="status"><span>3D 預覽中，尚未發布</span><button class="ed-btn" id="pv-edit" type="button">繼續編輯</button><button class="ed-btn primary" id="pv-publish" type="button">發布</button><button class="ed-btn danger" id="pv-discard" type="button">放棄</button></div>
+
+<section id="editor" hidden aria-label="平面配置編輯器">
+  <header class="ed-bar">
+    <h2>平面配置編輯<span class="sub">拖曳物件調整位置，只能在這張平面地圖上修改</span></h2>
+    <button class="ed-btn" id="ed-undo" type="button" disabled>復原</button>
+    <button class="ed-btn" id="ed-preview" type="button">3D 預覽</button>
+    <button class="ed-btn" id="ed-close" type="button">關閉</button>
+    <button class="ed-btn primary" id="ed-save" type="button">儲存並發布</button>
+  </header>
+  <div class="ed-map">
+    <canvas id="ed-canvas" aria-label="平面地圖"></canvas>
+    <div class="ed-hint" id="ed-hint">點選物件後拖曳移動；拖曳空白處平移地圖；滾輪或雙指縮放。</div>
+    <div class="ed-scale" id="ed-scale"></div>
+    <div class="ed-zoom"><button id="ed-zin" type="button" aria-label="放大">＋</button><button id="ed-zout" type="button" aria-label="縮小">－</button><button id="ed-fit" type="button" aria-label="看全區" style="font-size:13px">全區</button></div>
+  </div>
+  <aside class="ed-side">
+    <section>
+      <h3>可移動的圖層</h3>
+      <div class="ed-layers" id="ed-layers"></div>
+    </section>
+    <section>
+      <h3>新增站點</h3>
+      <div class="ed-add">
+        <button class="ed-btn ubike" id="ed-add-ubike" type="button" aria-pressed="false">＋ ubike 站</button>
+        <button class="ed-btn bubu" id="ed-add-bubu" type="button" aria-pressed="false">＋ 愛心專車站</button>
+      </div>
+    </section>
+    <section>
+      <h3>選取的物件</h3>
+      <div id="ed-sel"><p class="ed-empty">在地圖上點一個物件。房舍、部落地標、校園物件可以移動和旋轉；ubike 站、愛心專車站還可以改名或刪除。</p></div>
+    </section>
+    <section>
+      <h3>需要注意</h3>
+      <div class="ed-warnlist" id="ed-warns"></div>
+    </section>
+    <p id="ed-msg" role="status"></p>
+  </aside>
+</section>
+<div id="ed-confirm" hidden role="dialog" aria-modal="true" aria-labelledby="ed-confirm-title">
+  <div class="box">
+    <h3 id="ed-confirm-title">發布新的配置？</h3>
+    <p id="ed-confirm-text"></p>
+    <div class="ed-row"><button class="ed-btn" id="ed-confirm-no" type="button">再想想</button><button class="ed-btn primary" id="ed-confirm-yes" type="button">確定發布</button></div>
+  </div>
+</div>
+
+<div id="joystick" class="hud" aria-label="移動搖桿"><div id="joystick-knob"></div></div>
+
+<section id="boot">
+  <div class="boot-card">
+    <p class="eyebrow">花蓮縣卓溪鄉 · 第一階段預覽</p>
+    <h1>卓楓學區探索地圖</h1>
+    <p class="lede">從中央山脈的山腳一路走到秀姑巒溪：逛逛卓楓國小，拜訪古楓部落和白端部落，找出藏在學區裡的每一個地點。</p>
+    <div class="facts">
+      <div class="fact"><div class="n">164–621 m</div><div class="t">海拔範圍</div></div>
+      <div class="fact"><div class="n">約 2 × 2.8 km</div><div class="t">地圖範圍</div></div>
+      <div class="fact"><div class="n" id="fact-count">—</div><div class="t">可探索地點</div></div>
+    </div>
+    <div class="boot-actions">
+      <button class="btn primary" id="boot-enter" type="button" disabled>訪客進入（免註冊）</button>
+      <button class="btn ghost" id="boot-login" type="button">學生登入<span class="tag">第二階段</span></button>
+    </div>
+    <p id="login-note" hidden>第二階段開放：老師會在後台替學生建立帳號。學生登入後，系統會記錄探索路線和完成的學習任務，老師可以看到每個人的學習歷程。訪客模式不需要帳號，但不會留下紀錄。</p>
+    <p id="boot-status">載入地形資料…</p>
+    <p class="credit">地形：內政部 20 公尺網格數值地形模型（2025 版），白端、古楓圖幅。校園配置依卓楓國小提供的配置圖；部落一般房舍位置為示意。</p>
+  </div>
+</section>
